@@ -1,0 +1,349 @@
+#!/usr/bin/env python3
+"""Inject the data payload into the page template and correct the copy.
+
+    python scripts/build_html.py [--template template/prototype.html]
+                                 [--data build/data.json] [--out dist/index.html]
+
+Every edit below is assertion-guarded: if the template changes shape, the build
+fails loudly here rather than silently shipping a half-patched page.
+"""
+import argparse, base64, io, os, sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import responsive
+
+ap = argparse.ArgumentParser()
+ap.add_argument('--template', default='template/prototype.html')
+ap.add_argument('--data', default='build/data.json')
+ap.add_argument('--out', default='dist/index.html')
+args = ap.parse_args()
+
+SRC, OUT = args.template, args.out
+src = io.open(SRC, encoding='utf-8').read()
+data = io.open(args.data, encoding='utf-8').read()
+
+def swap(old, new, why, count=1):
+    global src
+    if src.count(old) != count:
+        sys.exit(f'ERROR: template patch failed ({why}): '
+                 f'found {src.count(old)} occurrences, expected {count}. '
+                 f'Has template/prototype.html been edited?')
+    src = src.replace(old, new)
+
+# ---- 1. data payload + decoder ------------------------------------------
+start = src.index('const RAW_DATA = {')
+end = src.index('];', src.index('const ALL = [')) + 2
+src = src[:start] + 'const RAW_DATA = ' + data + ';\n' + '''
+const zoneOrder = ["North Central","North East","North West","South East","South South","South West"];
+const PAGE_SIZE = 60;
+
+const KIND_META = {
+  universities:  { label: "University",           unitLabel: "Faculty" },
+  colleges:      { label: "College of Education", unitLabel: "School" },
+  polytechnics:  { label: "Polytechnic",          unitLabel: "School" },
+  monotechnics:  { label: "Monotechnic",          unitLabel: "Department" },
+  health:        { label: "College of Health",    unitLabel: "School" },
+};
+
+// No source data for these two yet -- the UI shows a "coming soon" panel.
+const COMING_SOON = new Set(["monotechnics","health"]);
+
+/* Payload is column-dictionaried to keep the single file small: institution
+   details are hoisted into `i`, and unit / programme / award-type strings are
+   interned in `u` `p` `t`. Each row in `r` is
+   [instIdx, unitIdx, progIdx, typeIdx].  Cut-off marks and accreditation are
+   intentionally absent -- see the data note in the header. */
+function normalize(pack, kind){
+  if(!pack) return [];
+  const meta = KIND_META[kind];
+  const I = pack.i, U = pack.u, P = pack.p, T = pack.t;
+  return pack.r.map((row, n) => {
+    const inst = I[row[0]];
+    return {
+      id: kind + "-" + n,
+      kind,
+      kindLabel: meta.label,
+      institution: inst[0],
+      unit: U[row[1]],
+      unitLabel: meta.unitLabel,
+      programme: P[row[2]],
+      programmeType: T[row[3]],
+      state: inst[1],
+      zone: inst[2],
+      website: inst[3],
+      proprietorship: inst[4],
+      cutoffs: {},            // not yet sourced
+      accreditation: null,    // not yet sourced
+    };
+  });
+}
+
+const ALL = [
+  ...normalize(RAW_DATA.universities, "universities"),
+  ...normalize(RAW_DATA.colleges, "colleges"),
+  ...normalize(RAW_DATA.polytechnics, "polytechnics"),
+  ...normalize(RAW_DATA.monotechnics, "monotechnics"),
+  ...normalize(RAW_DATA.health, "health"),
+];''' + src[end:]
+
+# ---- 2. type tabs: flag the two unbuilt categories ----------------------
+swap('''      <button data-type="monotechnics">Monotechnics</button>
+      <button data-type="health">Colleges of Health</button>''',
+     '''      <button data-type="monotechnics">Monotechnics <span class="soon">Soon</span></button>
+      <button data-type="health">Colleges of Health <span class="soon">Soon</span></button>''',
+     'type tabs')
+
+# ---- 3. UTME score panel -> coming soon --------------------------------
+swap('''    <h3>Your UTME score</h3>
+    <div class="field">
+      <label for="scoreInput">Show programmes I currently qualify for</label>
+      <input type="text" inputmode="numeric" id="scoreInput" placeholder="e.g. 210 (leave blank to see all)">
+    </div>
+    <div class="field">
+      <label for="cutoffYearSelect">Viewing cut-off marks for</label>
+      <select id="cutoffYearSelect">
+        <option value="2026">2026 (current)</option>
+        <option value="2025">2025</option>
+        <option value="2024">2024</option>
+      </select>
+    </div>
+''',
+     '''    <h3>Your UTME score <span class="soon">Soon</span></h3>
+    <div class="soon-box">
+      Score matching and cut-off marks are <b>coming soon</b>. We're sourcing
+      official JAMB cut-offs per programme and year — until they're in, this
+      filter stays switched off rather than guessing.
+    </div>
+''',
+     'score panel')
+
+# ---- 4. accreditation filter -> coming soon ----------------------------
+swap('''    <div class="field">
+      <label for="accredSelect">Accreditation status</label>
+      <select id="accredSelect">
+        <option value="">Any</option>
+        <option value="full">Fully accredited only</option>
+        <option value="interim">Interim / pending review</option>
+      </select>
+    </div>
+''',
+     '''    <div class="field">
+      <label>Accreditation status <span class="soon">Soon</span></label>
+      <select disabled aria-disabled="true"><option>Coming soon</option></select>
+    </div>
+''',
+     'accreditation filter')
+
+# ---- 5. drop the cut-off sort option -----------------------------------
+swap('          <option value="cutoff_mark">Sort: Cut-off mark, low to high</option>\n', '',
+     'sort option')
+
+# ---- 6. coming-soon results panel --------------------------------------
+swap('''    <div class="empty" id="emptyState" style="display:none;">''',
+     '''    <div class="empty" id="comingSoon" style="display:none;">
+      <div class="display">Coming soon</div>
+      <div>We're still onboarding this category. Universities, colleges of education
+      and polytechnics are live now — switch to one of those to browse programmes.</div>
+    </div>
+    <div class="empty" id="emptyState" style="display:none;">''',
+     'coming-soon panel')
+
+# ---- 7. remove listeners for deleted controls --------------------------
+swap('''document.getElementById('accredSelect').addEventListener('change', e => {
+  state.accredFilter = e.target.value; state.visibleCount = PAGE_SIZE; render();
+});
+document.getElementById('scoreInput').addEventListener('input', e => {
+  const v = parseInt(e.target.value, 10);
+  state.scoreFilter = isNaN(v) ? null : v;
+  state.visibleCount = PAGE_SIZE; render();
+});
+document.getElementById('cutoffYearSelect').addEventListener('change', e => {
+  state.cutoffYear = e.target.value;
+  state.visibleCount = PAGE_SIZE; render();
+});
+''', '', 'dead listeners')
+
+# ---- 8. reset button: stop touching removed elements -------------------
+swap('''  state.progTypeFilter = ""; state.unitFilter = ""; state.accredFilter = ""; state.scoreFilter = null; state.cutoffYear = "2026";''',
+     '''  state.progTypeFilter = ""; state.unitFilter = "";''', 'reset state')
+swap('''  document.getElementById('accredSelect').value = "";
+  document.getElementById('scoreInput').value = "";
+  document.getElementById('cutoffYearSelect').value = "2026";
+''', '', 'reset DOM')
+
+# ---- 9. filtered(): drop accreditation + score predicates --------------
+swap('''    if(state.accredFilter === 'full' && !r.accreditation.toLowerCase().startsWith('full')) return false;
+    if(state.accredFilter === 'interim' && !r.accreditation.toLowerCase().startsWith('interim')) return false;
+    if(state.scoreFilter !== null){
+      const m = markFor(r);
+      if(m !== null && m > state.scoreFilter) return false;
+    }
+''', '', 'filter predicates')
+swap("    if(state.sort === 'cutoff_mark') return (markFor(a) ?? 999) - (markFor(b) ?? 999);\n", '',
+     'sort comparator')
+
+# ---- 10. active-filter chips ------------------------------------------
+swap('''  if(state.accredFilter) chips.push(['Accreditation: '+(state.accredFilter==='full'?'Fully accredited':'Interim'), () => { state.accredFilter=''; document.getElementById('accredSelect').value=''; }]);
+''', '', 'accred chip')
+swap('''  if(state.scoreFilter !== null) chips.push(['UTME score: '+state.scoreFilter, () => { state.scoreFilter=null; document.getElementById('scoreInput').value=''; }]);
+''', '', 'score chip')
+swap('''  if(state.cutoffYear !== '2026') chips.push(['Cut-off year: '+state.cutoffYear, () => { state.cutoffYear='2026'; document.getElementById('cutoffYearSelect').value='2026'; }]);
+''', '', 'year chip')
+
+# ---- 11. render(): route unbuilt categories to the coming-soon panel ---
+swap('''  const rows = filtered();
+  document.getElementById('resultCount').textContent = rows.length;
+  const grid = document.getElementById('resultsGrid');
+  const empty = document.getElementById('emptyState');
+  const loadMoreWrap = document.getElementById('loadMoreWrap');
+  grid.innerHTML = "";
+
+  if(rows.length === 0){''',
+     '''  const rows = filtered();
+  document.getElementById('resultCount').textContent = rows.length;
+  const grid = document.getElementById('resultsGrid');
+  const empty = document.getElementById('emptyState');
+  const soon = document.getElementById('comingSoon');
+  const loadMoreWrap = document.getElementById('loadMoreWrap');
+  grid.innerHTML = "";
+
+  if(COMING_SOON.has(state.type)){
+    soon.style.display = 'block';
+    empty.style.display = 'none';
+    loadMoreWrap.style.display = 'none';
+    renderActiveFilters(); renderTray();
+    return;
+  }
+  soon.style.display = 'none';
+
+  if(rows.length === 0){''',
+     'render routing')
+
+# ---- 12. card: cut-off + accreditation read "coming soon" --------------
+swap('''      <span class="mono">${markFor(r) !== null ? 'Cut-off: ' + markFor(r) : 'Cut-off: TBA'}</span>
+      <span style="color:${isFull ? 'var(--green)' : '#a5551e'};">${isFull ? '✓' : '⏳'} ${r.accreditation}</span>''',
+     '''      <span class="mono soon-inline">Cut-off: coming soon</span>
+      <span class="soon-inline">Accreditation: coming soon</span>''',
+     'card badges')
+swap("  const isFull = r.accreditation.toLowerCase().startsWith('full');\n", '', 'isFull')
+
+# ---- 13. compare table -------------------------------------------------
+swap("""      ['Cut-off mark','__cutoff__'], ['Accreditation','accreditation'],""",
+     """      ['Cut-off mark','__soon__'], ['Accreditation','__soon__'],""",
+     'compare fields')
+swap("""    let html = '<p style="font-size:0.8rem; color:var(--ink-muted); margin-bottom:12px;">Cut-off marks shown for ' + state.cutoffYear + '.</p>';""",
+     """    let html = '<p style="font-size:0.8rem; color:var(--ink-muted); margin-bottom:12px;">Cut-off marks and accreditation status are not yet available.</p>';""",
+     'compare note')
+swap("""        let val = key === '__cutoff__' ? (markFor(r) !== null ? markFor(r) : 'TBA') : r[key];""",
+     """        let val = key === '__soon__' ? '<span class="soon-inline">Coming soon</span>' : r[key];""",
+     'compare cell')
+
+# ---- 14. header copy ---------------------------------------------------
+swap('This directory currently holds <b><span id="subCount">–</span> listings</b> while we onboard the full national dataset.',
+     'This directory holds <b><span id="subCount">–</span> listings</b> across 583 institutions nationwide.',
+     'subtitle')
+swap('Filter by state, zone, ownership, accreditation or your UTME score, then compare your shortlist side by side.',
+     'Filter by state, zone, ownership and programme, then compare your shortlist side by side.',
+     'subtitle lead')
+
+banner = '''
+<div class="datanote" role="note">
+  <strong>What's in here.</strong>
+  Institutions, faculties/schools, programmes, states, zones, ownership and websites are
+  <b>real</b>, covering 583 universities, colleges of education and polytechnics.
+  <b>Cut-off marks and accreditation status are not yet available</b> — those fields read
+  "coming soon" rather than showing estimated figures. Monotechnics and colleges of health
+  are not yet loaded.
+</div>
+'''
+swap('<p class="sub">', banner + '<p class="sub">', 'banner')
+
+# ---- 15. styles --------------------------------------------------------
+swap('</style>', '''
+.datanote{
+  margin:14px 0 18px; padding:12px 14px; border-radius:10px;
+  background:#eef4fb; border:1px solid #bcd0e8; color:#2b3f56;
+  font-size:.86rem; line-height:1.55;
+}
+.datanote strong{ color:#1c2c3e; }
+.soon{
+  font-size:.62rem; text-transform:uppercase; letter-spacing:.05em;
+  background:#e4e8ee; color:#5d6b7c; padding:2px 5px; border-radius:4px;
+  margin-left:5px; font-weight:700; vertical-align:middle;
+}
+.soon-box{
+  padding:11px 13px; border-radius:9px; background:#f6f7f9;
+  border:1px dashed #c8cfd8; color:#5d6b7c; font-size:.8rem; line-height:1.5;
+}
+.soon-inline{ color:#8a95a3; font-style:italic; }
+select[disabled]{ background:#f3f4f6; color:#9aa4b1; cursor:not-allowed; }
+''' + '</style>', 'styles')
+
+
+# ---- 16. drop now-dead state fields and markFor ------------------------
+swap("""function markFor(r){
+  const v = r.cutoffs[state.cutoffYear];
+  return (v === undefined) ? null : v;
+}
+
+""", '', 'markFor')
+swap("""  accredFilter: "",
+  scoreFilter: null,
+  cutoffYear: "2026",
+""", '', 'dead state fields')
+
+
+# ---- 17. copy: only name the categories that are actually live ---------
+swap('Search programme listings across universities, colleges of education, polytechnics, monotechnics and colleges of health in Nigeria.',
+     'Search programme listings across universities, colleges of education and polytechnics in Nigeria.',
+     'category list in subtitle')
+
+# ---- 18. thousands separators on every rendered count ------------------
+swap("document.getElementById('statInstitutions').textContent = new Set(ALL.map(r=>r.institution)).size;",
+     "const fmt = n => n.toLocaleString('en-US');\n"
+     "document.getElementById('statInstitutions').textContent = fmt(new Set(ALL.map(r=>r.institution)).size);",
+     'stat institutions')
+swap("document.getElementById('statProgrammes').textContent = ALL.length;",
+     "document.getElementById('statProgrammes').textContent = fmt(ALL.length);",
+     'stat programmes')
+swap("document.getElementById('statStates').textContent = new Set(ALL.map(r=>r.state)).size;",
+     "document.getElementById('statStates').textContent = fmt(new Set(ALL.map(r=>r.state)).size);",
+     'stat states')
+swap("document.getElementById('subCount').textContent = ALL.length;",
+     "document.getElementById('subCount').textContent = fmt(ALL.length);",
+     'sub count')
+swap('''  btn.innerHTML = \'<div class="zn">\'+count+\' listings</div><div class="zc">\'+z+\'</div>\';''',
+     '''  btn.innerHTML = \'<div class="zn">\'+fmt(count)+\' listings</div><div class="zc">\'+z+\'</div>\';''',
+     'zone chip count')
+swap("  document.getElementById('resultCount').textContent = rows.length;",
+     "  document.getElementById('resultCount').textContent = fmt(rows.length);",
+     'result count')
+
+
+# ---- 21. responsive layer for phone and tablet -------------------------
+swap('<aside class="panel">', responsive.TOGGLE_HTML, 'filter toggle + panel id')
+swap('</style>', responsive.CSS + '</style>', 'responsive css')
+swap('</script>', responsive.JS + '</script>', 'filter toggle script')
+
+# ---- 19. store the payload encoded, not as readable JSON ---------------
+# View-source now shows an opaque blob instead of institution names and
+# programme lists. This is a speed bump against casual copying, NOT security:
+# the data still reaches the browser and anyone using developer tools can
+# recover it. See the README for what actually protects a dataset.
+_b64 = base64.b64encode(data.encode('utf-8')).decode('ascii')
+_old = 'const RAW_DATA = ' + data + ';'
+if src.count(_old) != 1:
+    sys.exit('ERROR: could not locate the payload to encode')
+src = src.replace(_old,
+    'const RAW_DATA = JSON.parse(new TextDecoder().decode(\n'
+    '  Uint8Array.from(atob("' + _b64 + '"), c => c.charCodeAt(0))));')
+
+# ---- 20. keep everything off the global scope --------------------------
+# Without this, `ALL` sits on window and one console command dumps the lot.
+_i = src.index('<script>') + len('<script>')
+_j = src.rindex('</script>')
+src = src[:_i] + '\n(function(){\n"use strict";\n' + src[_i:_j] + '\n})();\n' + src[_j:]
+
+os.makedirs(os.path.dirname(OUT) or '.', exist_ok=True)
+io.open(OUT, 'w', encoding='utf-8').write(src)
+print(f'wrote {OUT}  ({len(src)/1024/1024:.2f} MB)')
