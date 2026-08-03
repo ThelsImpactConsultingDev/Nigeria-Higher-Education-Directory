@@ -113,6 +113,16 @@ function csvToObjects(text){
   });
 }
 
+/* Universities have no programme-type column in the sheet, so this used to
+   read as blank/"Not specified". Per correction #2, universities should show
+   "Degree" for now instead of an unspecified value. Other kinds keep
+   "Coming Soon" until their award-type data is sourced. */
+function normalizeProgrammeType(raw, kind){
+  const isBlank = !raw || raw.toLowerCase() === "not specified";
+  if(!isBlank) return raw;
+  return kind === "universities" ? "Degree" : "Coming Soon";
+}
+
 function rowsToRecords(rows, kind, columns){
   const meta = KIND_META[kind];
   return rows.map((row, n) => {
@@ -130,7 +140,10 @@ function rowsToRecords(rows, kind, columns){
       unit: String(row[columns.unit] || "").trim(),
       unitLabel: meta.unitLabel,
       programme: String(row[columns.programme] || "").trim(),
-      programmeType: (columns.programmeType && String(row[columns.programmeType] || "").trim()) || "Coming Soon",
+      programmeType: normalizeProgrammeType(
+        (columns.programmeType && String(row[columns.programmeType] || "").trim()) || "",
+        kind
+      ),
       state: stateName,
       zone,
       website: String(row[columns.website] || "").trim().replace(/^https?:\/\//i, ""),
@@ -223,11 +236,11 @@ document.getElementById('heroInstCount').textContent = fmt(institutionCount);
 document.getElementById('heroInstCount2').textContent = fmt(institutionCount);
 
 const states = [...new Set(ALL.map(r=>r.state))].sort();
-const stateSelect = document.getElementById('stateSelect');
+const stateOptions = document.getElementById('stateOptions');
 states.forEach(s => {
   const opt = document.createElement('option');
-  opt.value = s; opt.textContent = s;
-  stateSelect.appendChild(opt);
+  opt.value = s;
+  stateOptions.appendChild(opt);
 });
 
 const progTypes = [...new Set(ALL.map(r=>r.programmeType))].sort();
@@ -239,11 +252,19 @@ progTypes.forEach(t => {
 });
 
 const units = [...new Set(ALL.map(r=>r.unit))].sort();
-const unitSelect = document.getElementById('unitSelect');
+const unitOptions = document.getElementById('unitOptions');
 units.forEach(u => {
   const opt = document.createElement('option');
-  opt.value = u; opt.textContent = u;
-  unitSelect.appendChild(opt);
+  opt.value = u;
+  unitOptions.appendChild(opt);
+});
+
+const programmes = [...new Set(ALL.map(r=>r.programme))].sort();
+const progOptions = document.getElementById('progOptions');
+programmes.forEach(p => {
+  const opt = document.createElement('option');
+  opt.value = p;
+  progOptions.appendChild(opt);
 });
 
 const zoneStrip = document.getElementById('zoneStrip');
@@ -271,8 +292,8 @@ document.querySelectorAll('#typeToggle button').forEach(btn => {
   });
 });
 
-document.getElementById('stateSelect').addEventListener('change', e => {
-  state.stateFilter = e.target.value; state.visibleCount = PAGE_SIZE; render();
+document.getElementById('stateSelect').addEventListener('input', e => {
+  state.stateFilter = e.target.value.trim(); state.visibleCount = PAGE_SIZE; render();
 });
 document.getElementById('progInput').addEventListener('input', e => {
   state.progQuery = e.target.value.toLowerCase(); state.visibleCount = PAGE_SIZE; render();
@@ -280,8 +301,8 @@ document.getElementById('progInput').addEventListener('input', e => {
 document.getElementById('progTypeSelect').addEventListener('change', e => {
   state.progTypeFilter = e.target.value; state.visibleCount = PAGE_SIZE; render();
 });
-document.getElementById('unitSelect').addEventListener('change', e => {
-  state.unitFilter = e.target.value; state.visibleCount = PAGE_SIZE; render();
+document.getElementById('unitSelect').addEventListener('input', e => {
+  state.unitFilter = e.target.value.trim(); state.visibleCount = PAGE_SIZE; render();
 });
 document.getElementById('heroSearch').addEventListener('input', e => {
   state.heroQuery = e.target.value.toLowerCase(); state.visibleCount = PAGE_SIZE; render();
@@ -319,10 +340,10 @@ function filtered(){
   return ALL.filter(r => {
     if(state.type !== "all" && r.kind !== state.type) return false;
     if(state.zone && r.zone !== state.zone) return false;
-    if(state.stateFilter && r.state !== state.stateFilter) return false;
+    if(state.stateFilter && !r.state.toLowerCase().includes(state.stateFilter.toLowerCase())) return false;
     if(!state.owners.has(r.proprietorship)) return false;
     if(state.progTypeFilter && r.programmeType !== state.progTypeFilter) return false;
-    if(state.unitFilter && r.unit !== state.unitFilter) return false;
+    if(state.unitFilter && !r.unit.toLowerCase().includes(state.unitFilter.toLowerCase())) return false;
     if(state.progQuery && !r.programme.toLowerCase().includes(state.progQuery)) return false;
     if(state.heroQuery){
       const hay = (r.programme+" "+r.institution+" "+r.state+" "+r.unit).toLowerCase();
@@ -478,7 +499,7 @@ function openCompareView(){
     heading.textContent = 'Side-by-side comparison';
     const fields = [
       ['Institution','institution'], ['Type','kindLabel'], ['Programme','programme'],
-      ['Unit','unit'], ['Programme / award type','programmeType'],
+      ['Unit','unit'], ['Award type','programmeType'],
       ['Cut-off mark','__soon__'], ['Accreditation','__soon__'],
       ['State','state'], ['Zone','zone'], ['Proprietorship','proprietorship'], ['Website','website'],
     ];
@@ -518,9 +539,9 @@ document.getElementById('navCompare').addEventListener('click', () => {
   setNav('navCompare');
   openCompareView();
 });
+const RESEARCHER_DASHBOARD_URL = "https://public.tableau.com/views/TheIsUni_Data/Dashboard5?:language=en-US&:sid=&:redirect=auth&:display_count=n&:origin=viz_share_link";
 document.getElementById('navResearchers').addEventListener('click', () => {
-  setNav('navResearchers');
-  document.querySelector('footer').scrollIntoView({behavior:'smooth'});
+  window.open(RESEARCHER_DASHBOARD_URL, '_blank', 'noopener');
 });
 document.getElementById('closeModal').addEventListener('click', () => {
   document.getElementById('modalBackdrop').classList.remove('show');
