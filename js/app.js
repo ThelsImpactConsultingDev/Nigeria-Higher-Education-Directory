@@ -12,13 +12,33 @@ const KIND_META = {
   health:        { label: "College of Health",    unitLabel: "School" },
 };
 
-// sheet (tab) name in data/source.xlsx -> internal category key
-const SHEETS = {
-  "Universities":            "universities",
-  "Colleges of Education":   "colleges",
-  "Polytechnics":            "polytechnics",
-  "Monotechnics":            "monotechnics",
-  "Colleges of Health":      "health",
+/* Live data lives in a Google Sheet (published to the web as CSV, one tab
+   per category). SHEET_KEY is the "publish to web" document key -- found in
+   the /d/e/<KEY>/pub URL Google gives you from File > Share > Publish to
+   web. Each tab has its own gid (visible in the browser URL as ?gid=... when
+   that tab is selected) and its own column names, which is why `columns`
+   below maps this app's field names to whatever that tab actually calls
+   them. Monotechnics and Colleges of Health have no tab yet, so they're
+   left out of SHEET_SOURCES entirely and stay "coming soon". */
+const SHEET_KEY = "2PACX-1vSSW4sqeZFTc9kQdHFOALOvRcwD8KuSZGraEoZuJa4JdevPedDKH0a3eQ0zwlMHjOnxvaQihO2C4Eea";
+
+function sheetCsvUrl(gid){
+  return `https://docs.google.com/spreadsheets/d/e/${SHEET_KEY}/pub?gid=${gid}&single=true&output=csv`;
+}
+
+const SHEET_SOURCES = {
+  universities: {
+    gid: "2065139486",
+    columns: { institution: "UNIVERSITIES", unit: "Faculty", programme: "Programmes", state: "STATE", website: "WEBSITE", proprietorship: "TYPE OF PROPRIETARY" },
+  },
+  colleges: {
+    gid: "1234885830",
+    columns: { institution: "COLLEGE OF EDUCATION", unit: "SCHOOLS", programme: "PROGRAMME", programmeType: "PROGRAMME TYPE", state: "STATE", website: "WEBSITES", proprietorship: "PROPRIETY" },
+  },
+  polytechnics: {
+    gid: "1375561536",
+    columns: { institution: "Polytechnic", unit: "Facilities", programme: "Programmes", state: "STATE", website: "WEBSITE", proprietorship: "TYPE OF PROPREITARY" },
+  },
 };
 
 /* Zone is never read from the sheet -- it's derived from State here, so an
@@ -42,27 +62,79 @@ const STATE_ZONE = {
   "Ondo":"South West", "Osun":"South West", "Oyo":"South West",
 };
 
-function rowsToRecords(rows, kind){
+// The sheets spell FCT a couple of different ways -- normalize to the
+// STATE_ZONE key before doing the zone lookup below.
+const STATE_ALIASES = {
+  "FCT": "FCT (Abuja)",
+  "Federal Capital Territory": "FCT (Abuja)",
+  "Abuja": "FCT (Abuja)",
+};
+
+/* Minimal RFC4180 CSV parser -- handles quoted fields, embedded commas,
+   escaped quotes ("") and embedded newlines. Google's published-CSV export
+   is the only format this app reads now, and the vendored SheetJS "core"
+   build's CSV support is unverified, so this is deliberately self-contained
+   rather than a dependency. */
+function parseCSV(text){
+  const rows = [];
+  let row = [], field = "", inQuotes = false;
+  for(let i = 0; i < text.length; i++){
+    const c = text[i];
+    if(inQuotes){
+      if(c === '"'){
+        if(text[i+1] === '"'){ field += '"'; i++; } else { inQuotes = false; }
+      } else {
+        field += c;
+      }
+    } else if(c === '"'){
+      inQuotes = true;
+    } else if(c === ','){
+      row.push(field); field = "";
+    } else if(c === '\r'){
+      // skip; \n (bare or as part of \r\n) ends the row
+    } else if(c === '\n'){
+      row.push(field); rows.push(row); row = []; field = "";
+    } else {
+      field += c;
+    }
+  }
+  if(field.length > 0 || row.length > 0){ row.push(field); rows.push(row); }
+  return rows;
+}
+
+function csvToObjects(text){
+  const rows = parseCSV(text);
+  if(rows.length === 0) return [];
+  const headers = rows[0].map(h => String(h).trim());
+  return rows.slice(1).map(r => {
+    const obj = {};
+    headers.forEach((h, idx) => { obj[h] = r[idx] !== undefined ? r[idx] : ""; });
+    return obj;
+  });
+}
+
+function rowsToRecords(rows, kind, columns){
   const meta = KIND_META[kind];
   return rows.map((row, n) => {
-    const institution = String(row["Institution"] || "").trim();
-    const stateName = String(row["State"] || "").trim();
+    const institution = String(row[columns.institution] || "").trim();
+    let stateName = String(row[columns.state] || "").trim();
     if(!institution || !stateName) return null;
+    stateName = STATE_ALIASES[stateName] || stateName;
     const zone = STATE_ZONE[stateName];
-    if(!zone) throw new Error(`Unknown state "${stateName}" on sheet for ${kind} (row ${n+2}). Add it to STATE_ZONE in js/app.js or fix the spelling in data/source.xlsx.`);
+    if(!zone) throw new Error(`Unknown state "${stateName}" on sheet for ${kind} (row ${n+2}). Add it to STATE_ZONE/STATE_ALIASES in js/app.js or fix the spelling in the source sheet.`);
     return {
       id: kind + "-" + n,
       kind,
       kindLabel: meta.label,
       institution,
-      unit: String(row["Unit"] || "").trim(),
+      unit: String(row[columns.unit] || "").trim(),
       unitLabel: meta.unitLabel,
-      programme: String(row["Programme"] || "").trim(),
-      programmeType: String(row["Award Type"] || "Not specified").trim() || "Not specified",
+      programme: String(row[columns.programme] || "").trim(),
+      programmeType: (columns.programmeType && String(row[columns.programmeType] || "").trim()) || "Not specified",
       state: stateName,
       zone,
-      website: String(row["Website"] || "").trim(),
-      proprietorship: String(row["Proprietorship"] || "").trim(),
+      website: String(row[columns.website] || "").trim().replace(/^https?:\/\//i, ""),
+      proprietorship: String(row[columns.proprietorship] || "").trim(),
       cutoffs: {},            // not yet sourced
       accreditation: null,    // not yet sourced
     };
@@ -109,31 +181,32 @@ function showLoadError(message){
 }
 
 async function loadData(){
-  let buf;
+  const recordsByKind = {};
+  Object.keys(KIND_META).forEach(k => { recordsByKind[k] = []; });
+
+  let fetched;
   try {
-    const res = await fetch('data/source.xlsx');
-    if(!res.ok) throw new Error(`HTTP ${res.status} fetching data/source.xlsx`);
-    buf = await res.arrayBuffer();
+    fetched = await Promise.all(Object.entries(SHEET_SOURCES).map(async ([kind, src]) => {
+      const url = sheetCsvUrl(src.gid);
+      const res = await fetch(url);
+      if(!res.ok) throw new Error(`HTTP ${res.status} fetching the "${kind}" sheet`);
+      const text = await res.text();
+      return [kind, text];
+    }));
   } catch(err){
-    showLoadError(`Couldn't fetch data/source.xlsx (${err.message}). If you opened this page directly from disk (a file:// URL), your browser blocks that fetch — serve the folder instead, e.g. <code>python -m http.server</code>, then open http://localhost:8000.`);
+    showLoadError(`Couldn't fetch the live directory data from Google Sheets (${err.message}). Check your connection, or that the sheet is still published to the web (File > Share > Publish to web in the source spreadsheet).`);
     throw err;
   }
 
   try {
-    // SheetJS's `type:'array'` wants a Uint8Array, not the raw ArrayBuffer
-    // fetch() hands back -- passing the ArrayBuffer directly doesn't throw, it
-    // silently parses as garbage (an empty phantom "Sheet1").
-    const wb = XLSX.read(new Uint8Array(buf), { type: 'array' });
-    const recordsByKind = {};
-    for(const [sheetName, kind] of Object.entries(SHEETS)){
-      const ws = wb.Sheets[sheetName];
-      const rows = ws ? XLSX.utils.sheet_to_json(ws, { defval: "" }) : [];
-      recordsByKind[kind] = rowsToRecords(rows, kind);
+    for(const [kind, text] of fetched){
+      const rows = csvToObjects(text);
+      recordsByKind[kind] = rowsToRecords(rows, kind, SHEET_SOURCES[kind].columns);
     }
     ALL = Object.values(recordsByKind).flat();
     COMING_SOON = new Set(Object.keys(recordsByKind).filter(k => recordsByKind[k].length === 0));
   } catch(err){
-    showLoadError(`data/source.xlsx didn't parse cleanly: ${err.message}`);
+    showLoadError(`The live sheet data didn't parse cleanly: ${err.message}`);
     throw err;
   }
 
@@ -141,10 +214,13 @@ async function loadData(){
 }
 
 function init(){
-document.getElementById('statInstitutions').textContent = fmt(new Set(ALL.map(r=>r.institution)).size);
+const institutionCount = new Set(ALL.map(r=>r.institution)).size;
+document.getElementById('statInstitutions').textContent = fmt(institutionCount);
 document.getElementById('statProgrammes').textContent = fmt(ALL.length);
 document.getElementById('statStates').textContent = fmt(new Set(ALL.map(r=>r.state)).size);
 document.getElementById('subCount').textContent = fmt(ALL.length);
+document.getElementById('heroInstCount').textContent = fmt(institutionCount);
+document.getElementById('heroInstCount2').textContent = fmt(institutionCount);
 
 const states = [...new Set(ALL.map(r=>r.state))].sort();
 const stateSelect = document.getElementById('stateSelect');

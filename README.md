@@ -4,27 +4,24 @@ A plain HTML/CSS/JS site listing programmes across Nigerian universities,
 colleges of education and polytechnics — search by programme, filter by
 state, zone and ownership, and compare up to 3 listings side by side.
 
-**Current data:** 17,862 listings · 583 institutions · 37 states.
-
-No build step, no server-side code, no CI pipeline. The page reads its data
-straight out of `data/source.xlsx` in the browser — edit that workbook and
-reload.
+No build step, no server-side code, no CI pipeline. The page fetches its
+data live from a Google Sheet on every load — edit the sheet and reload,
+nothing to regenerate.
 
 ## Files
 
 ```
 index.html               the page — markup only
 css/styles.css            all styling, including the mobile/tablet breakpoints
-js/app.js                 fetches + parses source.xlsx, filtering, search, sorting, compare tray, render logic
-js/vendor/xlsx.core.min.js  SheetJS (https://sheetjs.com) — reads the workbook client-side
-data/source.xlsx          the dataset — this is what you edit
+js/app.js                 fetches + parses the Google Sheet CSVs, filtering, search, sorting, compare tray, render logic
+data/source.xlsx          legacy dataset, no longer read by the app (kept for reference)
 assets/logo.png           site logo / favicon
 ```
 
 ## Running it locally
 
-`index.html` fetches `data/source.xlsx` with `fetch()`, which browsers block
-on a plain `file://` double-click (no CORS on local files). Serve the folder
+`index.html` fetches CSV data with `fetch()`, which browsers block on a
+plain `file://` double-click (no CORS on local files). Serve the folder
 instead:
 
 ```
@@ -37,33 +34,55 @@ failing silently.
 
 ## Editing the data
 
-Open `data/source.xlsx` in Excel, Google Sheets, LibreOffice, whatever.
-There are 5 sheets (tabs): **Universities**, **Colleges of Education**,
-**Polytechnics**, **Monotechnics**, **Colleges of Health**. Each row is one
-programme listing, with columns:
+The data source is this Google Sheet:
+https://docs.google.com/spreadsheets/d/1srub2TQsRPIWYH9IqZZfB-hajgJj6B62hlnhqxZIV-g/edit
 
-| Institution | State | Website | Proprietorship | Unit | Programme | Award Type |
-|---|---|---|---|---|---|---|
+It has 3 tabs, each mapped to one category in `SHEET_SOURCES` in `js/app.js`:
 
-- **State** must be one of the 36 states or `FCT (Abuja)`, spelled exactly
-  as the app expects (see `STATE_ZONE` in `js/app.js` for the full list).
-  **Zone is not a column** — the app derives it from State on load, so a
-  listing can never end up with a state/zone that disagree. An unrecognized
-  state name fails loudly (an on-page error naming the row and the typo)
-  instead of shipping a mis-zoned or silently dropped listing.
-- **Proprietorship** should be `Federal`, `State`, or `Private` — anything
-  else won't match the ownership filter checkboxes.
-- **Award Type** can be left blank; it falls back to "Not specified" (true
-  today for most universities and polytechnics — only colleges of education
-  reliably carry a real award type).
-- **Monotechnics** and **Colleges of Health** are empty (header row only).
-  As soon as either sheet gets real rows, its "coming soon" panel
-  disappears automatically — nothing in the code needs to change.
+| Tab | Category | Columns |
+| --- | -------- | ------- |
+| `Cleaned_Fed_State_Private_Uny_Faculty_Courses` | Universities | UNIVERSITIES, Faculty, Programmes, STATE, WEBSITE, TYPE OF PROPRIETARY |
+| `Cleaned Colleges of Education` | Colleges of Education | COLLEGE OF EDUCATION, SCHOOLS, PROGRAMME, PROGRAMME TYPE, STATE, PROPRIETY, WEBSITES |
+| `Fed_St_Pri_Polytechnics_programmes` | Polytechnics | Polytechnic, Programmes, Facilities, STATE, WEBSITE, TYPE OF PROPREITARY |
+
+**Monotechnics** and **Colleges of Health** have no tab yet, so they stay
+"coming soon" — add a tab for either and a matching entry in
+`SHEET_SOURCES` to bring them online.
+
+To edit: open the sheet, edit the relevant tab, done — the site re-fetches
+on every page load, no re-publish step needed. If you rename a column
+header, update the matching entry in `SHEET_SOURCES` (`js/app.js`) to match,
+or that field will just come through blank.
+
+**The sheet must stay published to the web** (`File > Share > Publish to
+web` → Entire Document → CSV). Plain "Anyone with the link" sharing is not
+enough on some Google accounts — Workspace/managed accounts can silently
+require sign-in for viewers even when the share dialog looks fully public.
+Publish to web bypasses that and is what the app actually fetches from
+(see `SHEET_KEY`/`sheetCsvUrl()` in `js/app.js`). If a tab's `gid` changes
+(e.g. the tab is deleted and recreated), update it in `SHEET_SOURCES` — find
+the new value by clicking the tab and reading `?gid=...` out of the browser
+URL bar.
+
+- **State** must be one of the 36 states or a recognized spelling of the
+  FCT (`FCT (Abuja)`, `FCT`, `Federal Capital Territory`, `Abuja` — see
+  `STATE_ALIASES` in `js/app.js`). Anything else fails loudly (an on-page
+  error naming the row and the typo) instead of shipping a mis-zoned or
+  silently dropped listing. **Zone is not read from the sheet** — the app
+  derives it from State on load, so a listing can never end up with a
+  state/zone that disagree, even though the sheets do carry their own
+  (sometimes inconsistent) zone column.
+- **Proprietorship/Propriety/Type of Proprietary** should be `Federal`,
+  `State`, or `Private` — anything else won't match the ownership filter
+  checkboxes.
+- **Programme Type** (Colleges of Education only) can be left blank; it
+  falls back to "Not specified", same as Universities and Polytechnics,
+  which don't have this column at all.
+- **Website** values may include `http://`/`https://` already — the app
+  strips it before storing, since the card/compare views add `https://`
+  themselves.
 - Add a new institution by just adding rows for it; there's no separate
   place to register an institution name.
-
-After editing, just reload the page (or re-deploy) — there's nothing to
-run, nothing to regenerate.
 
 ## Known data gaps
 
@@ -78,16 +97,7 @@ run, nothing to regenerate.
 
 Static files — push this repo and point GitHub Pages / Netlify / Cloudflare
 Pages at the repo root (no build command, no output directory override
-needed). All of those serve over HTTP(S), so the `fetch()` of
-`data/source.xlsx` works the same as it does locally under
-`python -m http.server`.
-
-## A note on file size
-
-`data/source.xlsx` is ~6MB because a flat spreadsheet repeats institution
-and programme names on every row — that's the tradeoff for making the data
-directly editable in Excel instead of a compact indexed format. The page
-parses it client-side with SheetJS in a few seconds. If that ever becomes a
-problem on slow connections, the fix is to keep this workbook as the
-editing source but add a tiny build step that compacts it into a smaller
-JSON payload for the page to fetch instead — not needed today.
+needed). All of those serve over HTTP(S), so the `fetch()` calls to Google
+Sheets work the same as they do locally under `python -m http.server`.
+The page has no dependency on being served from any particular origin —
+Google's published-CSV endpoint sends permissive CORS headers.
