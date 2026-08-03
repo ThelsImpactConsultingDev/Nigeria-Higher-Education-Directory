@@ -130,7 +130,7 @@ function rowsToRecords(rows, kind, columns){
       unit: String(row[columns.unit] || "").trim(),
       unitLabel: meta.unitLabel,
       programme: String(row[columns.programme] || "").trim(),
-      programmeType: (columns.programmeType && String(row[columns.programmeType] || "").trim()) || "Not specified",
+      programmeType: (columns.programmeType && String(row[columns.programmeType] || "").trim()) || "Coming Soon",
       state: stateName,
       zone,
       website: String(row[columns.website] || "").trim().replace(/^https?:\/\//i, ""),
