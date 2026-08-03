@@ -86,19 +86,22 @@
     <h3>Refine results</h3>
     <div class="field">
       <label for="stateSelect">State</label>
-      <select id="stateSelect"><option value="">All states</option></select>
+      <input type="text" id="stateSelect" list="stateOptions" placeholder="All states" autocomplete="off">
+      <datalist id="stateOptions"></datalist>
     </div>
     <div class="field">
       <label for="progInput">Programme contains</label>
-      <input type="text" id="progInput" placeholder="e.g. Engineering">
+      <input type="text" id="progInput" list="progOptions" placeholder="e.g. Engineering" autocomplete="off">
+      <datalist id="progOptions"></datalist>
     </div>
     <div class="field">
-      <label for="progTypeSelect">Programme / award type</label>
+      <label for="progTypeSelect">Award type</label>
       <select id="progTypeSelect"><option value="">Any</option></select>
     </div>
     <div class="field">
       <label for="unitSelect">Faculty / School / Department</label>
-      <select id="unitSelect"><option value="">Any</option></select>
+      <input type="text" id="unitSelect" list="unitOptions" placeholder="Any" autocomplete="off">
+      <datalist id="unitOptions"></datalist>
     </div>
     <div class="field">
       <label>Accreditation status <span class="soon">Soon</span></label>
