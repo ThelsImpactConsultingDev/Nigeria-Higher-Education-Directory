@@ -131,6 +131,7 @@
     padding:20px; height:max-content;
   }
   .panel h3{font-size:0.95rem; margin-bottom:14px; display:flex; align-items:center; gap:8px;}
+  .panel h3:not(:first-of-type){margin-top: 26px;}
   .panel h3::before{content:''; width:6px; height:6px; background:var(--blue); border-radius:50%; display:inline-block;}
   .field{margin-bottom:20px;}
   .field label{
