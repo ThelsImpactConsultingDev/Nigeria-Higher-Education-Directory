@@ -230,7 +230,9 @@ function init(){
 const institutionCount = new Set(ALL.map(r=>r.institution)).size;
 document.getElementById('statInstitutions').textContent = fmt(institutionCount);
 document.getElementById('statProgrammes').textContent = fmt(ALL.length);
-document.getElementById('statStates').textContent = fmt(new Set(ALL.map(r=>r.state)).size);
+const stateCount = new Set(ALL.map(r=>r.state)).size;
+const hasFCT = new Set(ALL.map(r=>r.state)).has('FCT (Abuja)');
+document.getElementById('statStates').textContent = hasFCT ? (stateCount - 1) + ' + FCT' : fmt(stateCount);
 document.getElementById('subCount').textContent = fmt(ALL.length);
 document.getElementById('heroInstCount').textContent = fmt(institutionCount);
 document.getElementById('heroInstCount2').textContent = fmt(institutionCount);
