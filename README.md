@@ -39,11 +39,11 @@ https://docs.google.com/spreadsheets/d/1srub2TQsRPIWYH9IqZZfB-hajgJj6B62hlnhqxZI
 
 It has 3 tabs, each mapped to one category in `SHEET_SOURCES` in `js/app.js`:
 
-| Tab | Category | Columns |
-| --- | -------- | ------- |
-| `Cleaned_Fed_State_Private_Uny_Faculty_Courses` | Universities | UNIVERSITIES, Faculty, Programmes, STATE, WEBSITE, TYPE OF PROPRIETARY |
-| `Cleaned Colleges of Education` | Colleges of Education | COLLEGE OF EDUCATION, SCHOOLS, PROGRAMME, PROGRAMME TYPE, STATE, PROPRIETY, WEBSITES |
-| `Fed_St_Pri_Polytechnics_programmes` | Polytechnics | Polytechnic, Programmes, Facilities, STATE, WEBSITE, TYPE OF PROPREITARY |
+| Tab                                             | Category              | Columns                                                                              |
+| ----------------------------------------------- | --------------------- | ------------------------------------------------------------------------------------ |
+| `Cleaned_Fed_State_Private_Uny_Faculty_Courses` | Universities          | UNIVERSITIES, Faculty, Programmes, STATE, WEBSITE, TYPE OF PROPRIETARY               |
+| `Cleaned Colleges of Education`                 | Colleges of Education | COLLEGE OF EDUCATION, SCHOOLS, PROGRAMME, PROGRAMME TYPE, STATE, PROPRIETY, WEBSITES |
+| `Fed_St_Pri_Polytechnics_programmes`            | Polytechnics          | Polytechnic, Programmes, Facilities, STATE, WEBSITE, TYPE OF PROPREITARY             |
 
 **Monotechnics** and **Colleges of Health** have no tab yet, so they stay
 "coming soon" — add a tab for either and a matching entry in
