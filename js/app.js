@@ -128,7 +128,8 @@ function rowsToRecords(rows, kind, columns){
   return rows.map((row, n) => {
     const institution = String(row[columns.institution] || "").trim();
     let stateName = String(row[columns.state] || "").trim();
-    if(!institution || !stateName) return null;
+    const programme = String(row[columns.programme] || "").trim();
+    if(!institution || !stateName || !programme) return null;
     stateName = STATE_ALIASES[stateName] || stateName;
     const zone = STATE_ZONE[stateName];
     if(!zone) throw new Error(`Unknown state "${stateName}" on sheet for ${kind} (row ${n+2}). Add it to STATE_ZONE/STATE_ALIASES in js/app.js or fix the spelling in the source sheet.`);
@@ -139,7 +140,7 @@ function rowsToRecords(rows, kind, columns){
       institution,
       unit: String(row[columns.unit] || "").trim(),
       unitLabel: meta.unitLabel,
-      programme: String(row[columns.programme] || "").trim(),
+      programme,
       programmeType: normalizeProgrammeType(
         (columns.programmeType && String(row[columns.programmeType] || "").trim()) || "",
         kind
@@ -499,9 +500,11 @@ function openCompareView(){
     modalBody.querySelector('.grid').appendChild(card(rows[0]));
   } else {
     heading.textContent = 'Side-by-side comparison';
+    const unitLabels = [...new Set(rows.map(r => r.unitLabel))];
+    const unitFieldLabel = unitLabels.join(' / '); // e.g. "Faculty" alone, or "Faculty / School" when comparing across institution types
     const fields = [
       ['Institution','institution'], ['Type','kindLabel'], ['Programme','programme'],
-      ['Unit','unit'], ['Award type','programmeType'],
+      [unitFieldLabel,'unit'], ['Award type','programmeType'],
       ['Cut-off mark','__soon__'], ['Accreditation','__soon__'],
       ['State','state'], ['Zone','zone'], ['Proprietorship','proprietorship'], ['Website','website'],
     ];
@@ -541,7 +544,7 @@ document.getElementById('navCompare').addEventListener('click', () => {
   setNav('navCompare');
   openCompareView();
 });
-const RESEARCHER_DASHBOARD_URL = "https://public.tableau.com/views/TheIsUni_Data/Dashboard5?:language=en-US&:sid=&:redirect=auth&:display_count=n&:origin=viz_share_link";
+const RESEARCHER_DASHBOARD_URL = "https://public.tableau.com/views/TheIsUni_Data/Dashboard5?:language=en-US&:display_count=n&:origin=viz_share_link";
 document.getElementById('navResearchers').addEventListener('click', () => {
   window.open(RESEARCHER_DASHBOARD_URL, '_blank', 'noopener');
 });
