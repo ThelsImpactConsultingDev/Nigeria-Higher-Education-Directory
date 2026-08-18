@@ -1,4 +1,4 @@
-  :root{
+ :root{
     --navy: #0D173E;
     --navy-soft: #172352;
     --blue: #1B45C9;
@@ -64,6 +64,22 @@
   }
   nav.top button:hover{background:var(--blue-pale); color:var(--blue-deep);}
   nav.top button.on{background:var(--navy); color:#fff;}
+
+  /* Lightweight tooltip for nav items still marked "coming soon". */
+  [data-tooltip]{position:relative;}
+  [data-tooltip]::after{
+    content:attr(data-tooltip);
+    position:absolute; top:calc(100% + 8px); left:50%; transform:translateX(-50%) translateY(-4px);
+    background:var(--navy); color:#fff; font-size:0.72rem; font-weight:500; line-height:1.35;
+    padding:8px 12px; border-radius:8px; white-space:normal; width:220px; text-align:center;
+    box-shadow:0 10px 24px rgba(13,23,62,0.22);
+    opacity:0; pointer-events:none; transition:opacity .15s ease, transform .15s ease; z-index:60;
+  }
+  [data-tooltip]:hover::after, [data-tooltip]:focus-visible::after{
+    opacity:1; transform:translateX(-50%) translateY(0);
+  }
+
+  .unavailable{color:var(--ink-muted); font-style:italic;}
 
   /* ---------- Hero ---------- */
   .hero{
@@ -186,16 +202,25 @@
   .card .prog{font-family:'Fraunces'; font-size:1.12rem; color:var(--navy); line-height:1.25;}
   .card .inst{font-size:0.86rem; color:var(--ink); font-weight:500;}
   .card .fac{font-size:0.78rem; color:var(--ink-muted);}
+  .card button.inst-link, .card button.fac-link{
+    background:none; border:none; padding:0; margin:0; text-align:left; font-family:inherit; cursor:pointer;
+    text-decoration:underline; text-decoration-color:transparent; text-underline-offset:2px;
+    transition:text-decoration-color .15s ease, color .15s ease;
+  }
+  .card button.inst-link:hover, .card button.fac-link:hover{
+    color:var(--blue-deep); text-decoration-color:currentColor;
+  }
   .card .meta{display:flex; gap:14px; font-size:0.78rem; color:var(--ink-muted); margin-top:2px; flex-wrap:wrap;}
   .card .meta span{display:flex; align-items:center; gap:5px;}
   .card-actions{display:flex; gap:8px; margin-top:6px;}
-  .card-actions a, .card-actions button{
+  .card-actions a, .card-actions button, .card-actions span.unavailable{
     flex:1; text-align:center; padding:8px 10px; border-radius:8px; font-size:0.78rem; font-weight:600; text-decoration:none;
     border:1px solid var(--line); color:var(--navy); background:#FBFAF6;
   }
   .card-actions a:hover{border-color:var(--navy);}
-  .card-actions button.add{background:var(--navy); color:#fff; border-color:var(--navy);}
-  .card-actions button.add.added{background:var(--blue); color:#fff; border-color:var(--blue);}
+  .card-actions span.unavailable{color:var(--ink-muted); font-style:italic; cursor:default;}
+  .card-actions button.add{background:var(--navy); color:#fff; border:1px solid #fff;}
+  .card-actions button.add.added{background:var(--blue); color:#fff; border:1px solid #fff;}
 
   .load-more{display:flex; justify-content:center; margin-top:26px;}
   .load-more button{
