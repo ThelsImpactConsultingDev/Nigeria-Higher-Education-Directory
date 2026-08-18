@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Data Intelligence &amp; Analytics — Nigeria Higher Education Directory</title>
+<title>Nigeria Higher Education Directory</title>
 <link rel="icon" type="image/png" href="assets/logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -17,14 +17,14 @@
     <div class="brand">
       <img src="assets/logo.png" alt="Data Intelligence & Analytics logo">
       <div class="brand-text">
-        <span class="name">Data Intelligence <span class="amp">&amp;</span> Analytics</span>
-        <span class="tag">Nigeria Higher Education Directory</span>
+        <span class="name">Nigeria Higher Education Directory</span>
+        <span class="tag">Powered by DIA Thels Impact Consulting</span>
       </div>
     </div>
     <nav class="top">
       <button class="on" id="navDirectory">Directory</button>
       <button id="navCompare">Compare</button>
-      <button id="navResearchers">For Researchers</button>
+      <button id="navResearchers" data-tooltip="Coming soon &#8212; get information on Nigerian higher institutions">For Researchers</button>
     </nav>
   </div>
 </header>
@@ -84,29 +84,7 @@
     </div>
 
     <h3>Refine results</h3>
-    <div class="field">
-      <label for="stateSelect">State</label>
-      <input type="text" id="stateSelect" list="stateOptions" placeholder="All states" autocomplete="off">
-      <datalist id="stateOptions"></datalist>
-    </div>
-    <div class="field">
-      <label for="progInput">Programme</label>
-      <input type="text" id="progInput" list="progOptions" placeholder="e.g. Engineering" autocomplete="off">
-      <datalist id="progOptions"></datalist>
-    </div>
-    <div class="field">
-      <label for="progTypeSelect">Award type</label>
-      <select id="progTypeSelect"><option value="">Any</option></select>
-    </div>
-    <div class="field">
-      <label for="unitSelect">Faculty / School / Department</label>
-      <input type="text" id="unitSelect" list="unitOptions" placeholder="Any" autocomplete="off">
-      <datalist id="unitOptions"></datalist>
-    </div>
-    <div class="field">
-      <label>Accreditation status <span class="soon">Soon</span></label>
-      <select disabled aria-disabled="true"><option>Coming soon</option></select>
-    </div>
+
     <div class="field">
       <label>Proprietorship</label>
       <div class="checkbox-list" id="ownerFilters">
@@ -114,6 +92,33 @@
         <label><input type="checkbox" value="State" checked> State</label>
         <label><input type="checkbox" value="Private" checked> Private</label>
       </div>
+    </div>
+    <div class="field">
+      <label for="zoneSelect">Geopolitical zone</label>
+      <select id="zoneSelect"><option value="">All zones</option></select>
+    </div>
+    <div class="field">
+      <label for="stateSelect">State</label>
+      <input type="text" id="stateSelect" list="stateOptions" placeholder="All states" autocomplete="off">
+      <datalist id="stateOptions"></datalist>
+    </div>
+    <div class="field">
+      <label for="unitSelect" id="unitSelectLabel">Faculty / School / Department</label>
+      <input type="text" id="unitSelect" list="unitOptions" placeholder="Any" autocomplete="off">
+      <datalist id="unitOptions"></datalist>
+    </div>
+    <div class="field">
+      <label for="progInput">Programme</label>
+      <input type="text" id="progInput" list="progOptions" placeholder="e.g. Engineering" autocomplete="off">
+      <datalist id="progOptions"></datalist>
+    </div>
+    <div class="field" id="progTypeField">
+      <label for="progTypeSelect">Award type</label>
+      <select id="progTypeSelect"><option value="">Any</option></select>
+    </div>
+    <div class="field">
+      <label>Accreditation status <span class="soon">Soon</span></label>
+      <select disabled aria-disabled="true"><option>Coming soon</option></select>
     </div>
     <button class="reset-btn" id="resetBtn">Reset all filters</button>
   </aside>
