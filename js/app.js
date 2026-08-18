@@ -165,12 +165,21 @@ const state = {
   progQuery: "",
   progTypeFilter: "",
   unitFilter: "",
+  instFilter: "",
   heroQuery: "",
   owners: new Set(["Federal","State","Private"]),
   sort: "institution",
   compare: new Set(),
   visibleCount: PAGE_SIZE,
 };
+
+/* Award type only carries real, sourced data for Colleges of Education right
+   now (universities/polytechnics show a placeholder) -- and per correction
+   #2, the filter itself should be hidden entirely when the selected
+   institution type is "Universities", since it doesn't apply there yet. */
+function awardTypeApplies(type){
+  return type !== "universities";
+}
 
 const fmt = n => n.toLocaleString('en-US');
 
@@ -254,21 +263,60 @@ progTypes.forEach(t => {
   progTypeSelect.appendChild(opt);
 });
 
-const units = [...new Set(ALL.map(r=>r.unit))].sort();
-const unitOptions = document.getElementById('unitOptions');
-units.forEach(u => {
+const zoneSelect = document.getElementById('zoneSelect');
+zoneOrder.forEach(z => {
   const opt = document.createElement('option');
-  opt.value = u;
-  unitOptions.appendChild(opt);
+  opt.value = z; opt.textContent = z;
+  zoneSelect.appendChild(opt);
 });
 
-const programmes = [...new Set(ALL.map(r=>r.programme))].sort();
-const progOptions = document.getElementById('progOptions');
-programmes.forEach(p => {
-  const opt = document.createElement('option');
-  opt.value = p;
-  progOptions.appendChild(opt);
-});
+/* Faculty/School and Programme are dependent dropdowns: their option lists
+   narrow to whatever institution type (and, once one is picked, faculty)
+   is currently selected, so e.g. choosing "Engineering" as a faculty only
+   offers Engineering-related programmes rather than every programme in the
+   whole directory. */
+function scopedRecords({ toUnit } = {}){
+  return ALL.filter(r => {
+    if(state.type !== 'all' && r.kind !== state.type) return false;
+    if(state.instFilter && r.institution !== state.instFilter) return false;
+    if(toUnit && state.unitFilter && r.unit !== state.unitFilter) return false;
+    return true;
+  });
+}
+
+function refreshDependentOptions(){
+  const unitOptions = document.getElementById('unitOptions');
+  const progOptions = document.getElementById('progOptions');
+  unitOptions.innerHTML = "";
+  progOptions.innerHTML = "";
+
+  const units = [...new Set(scopedRecords().map(r=>r.unit))].filter(Boolean).sort();
+  units.forEach(u => {
+    const opt = document.createElement('option');
+    opt.value = u;
+    unitOptions.appendChild(opt);
+  });
+
+  const programmes = [...new Set(scopedRecords({toUnit:true}).map(r=>r.programme))].filter(Boolean).sort();
+  programmes.forEach(p => {
+    const opt = document.createElement('option');
+    opt.value = p;
+    progOptions.appendChild(opt);
+  });
+}
+refreshDependentOptions();
+
+/* Award type is only meaningful once Colleges of Education (or another
+   non-university type) is selected -- hide the whole field for
+   Universities per correction #2. */
+function syncAwardTypeVisibility(){
+  document.getElementById('progTypeField').style.display = awardTypeApplies(state.type) ? '' : 'none';
+  if(!awardTypeApplies(state.type) && state.progTypeFilter){
+    state.progTypeFilter = '';
+    document.getElementById('progTypeSelect').value = '';
+  }
+}
+syncAwardTypeVisibility();
 
 const zoneStrip = document.getElementById('zoneStrip');
 zoneOrder.forEach(z => {
@@ -279,6 +327,7 @@ zoneOrder.forEach(z => {
   btn.innerHTML = '<div class="zn">'+fmt(count)+' listings</div><div class="zc">'+z+'</div>';
   btn.addEventListener('click', () => {
     state.zone = (state.zone === z) ? null : z;
+    document.getElementById('zoneSelect').value = state.zone || '';
     state.visibleCount = PAGE_SIZE;
     render();
   });
@@ -290,11 +339,23 @@ document.querySelectorAll('#typeToggle button').forEach(btn => {
     document.querySelectorAll('#typeToggle button').forEach(b=>b.classList.remove('active'));
     btn.classList.add('active');
     state.type = btn.dataset.type;
+    // Faculty/programme picks made under the previous type rarely carry
+    // over cleanly, so clear the dependent fields rather than leaving a
+    // stale (and now possibly invalid) selection in place.
+    state.unitFilter = ''; document.getElementById('unitSelect').value = '';
+    state.progQuery = ''; document.getElementById('progInput').value = '';
+    document.getElementById('unitSelectLabel').textContent =
+      (KIND_META[btn.dataset.type] ? KIND_META[btn.dataset.type].unitLabel : 'Faculty / School / Department');
+    syncAwardTypeVisibility();
+    refreshDependentOptions();
     state.visibleCount = PAGE_SIZE;
     render();
   });
 });
 
+document.getElementById('zoneSelect').addEventListener('change', e => {
+  state.zone = e.target.value || null; state.visibleCount = PAGE_SIZE; render();
+});
 document.getElementById('stateSelect').addEventListener('input', e => {
   state.stateFilter = e.target.value.trim(); state.visibleCount = PAGE_SIZE; render();
 });
@@ -305,7 +366,9 @@ document.getElementById('progTypeSelect').addEventListener('change', e => {
   state.progTypeFilter = e.target.value; state.visibleCount = PAGE_SIZE; render();
 });
 document.getElementById('unitSelect').addEventListener('input', e => {
-  state.unitFilter = e.target.value.trim(); state.visibleCount = PAGE_SIZE; render();
+  state.unitFilter = e.target.value.trim(); state.visibleCount = PAGE_SIZE;
+  refreshDependentOptions();
+  render();
 });
 document.getElementById('heroSearch').addEventListener('input', e => {
   state.heroQuery = e.target.value.toLowerCase(); state.visibleCount = PAGE_SIZE; render();
@@ -325,27 +388,32 @@ document.getElementById('loadMoreBtn').addEventListener('click', () => {
 });
 document.getElementById('resetBtn').addEventListener('click', () => {
   state.type = "all"; state.zone = null; state.stateFilter = ""; state.progQuery = "";
-  state.progTypeFilter = ""; state.unitFilter = "";
+  state.progTypeFilter = ""; state.unitFilter = ""; state.instFilter = "";
   state.heroQuery = ""; state.owners = new Set(["Federal","State","Private"]);
   state.sort = "institution"; state.visibleCount = PAGE_SIZE;
   document.getElementById('stateSelect').value = "";
   document.getElementById('progInput').value = "";
   document.getElementById('progTypeSelect').value = "";
   document.getElementById('unitSelect').value = "";
+  document.getElementById('zoneSelect').value = "";
+  document.getElementById('unitSelectLabel').textContent = "Faculty / School / Department";
   document.getElementById('heroSearch').value = "";
   document.querySelectorAll('#ownerFilters input').forEach(i=>i.checked=true);
   document.querySelectorAll('#typeToggle button').forEach(b=>b.classList.remove('active'));
   document.querySelector('#typeToggle button[data-type="all"]').classList.add('active');
+  syncAwardTypeVisibility();
+  refreshDependentOptions();
   render();
 });
 
 function filtered(){
   return ALL.filter(r => {
     if(state.type !== "all" && r.kind !== state.type) return false;
+    if(state.instFilter && r.institution !== state.instFilter) return false;
     if(state.zone && r.zone !== state.zone) return false;
     if(state.stateFilter && !r.state.toLowerCase().includes(state.stateFilter.toLowerCase())) return false;
     if(!state.owners.has(r.proprietorship)) return false;
-    if(state.progTypeFilter && r.programmeType !== state.progTypeFilter) return false;
+    if(awardTypeApplies(state.type) && state.progTypeFilter && r.programmeType !== state.progTypeFilter) return false;
     if(state.unitFilter && !r.unit.toLowerCase().includes(state.unitFilter.toLowerCase())) return false;
     if(state.progQuery && !r.programme.toLowerCase().includes(state.progQuery)) return false;
     if(state.heroQuery){
@@ -403,11 +471,12 @@ function renderActiveFilters(){
     const label = document.querySelector('#typeToggle button[data-type="'+state.type+'"]').textContent;
     chips.push(['Type: '+label, () => { state.type='all'; document.querySelectorAll('#typeToggle button').forEach(b=>b.classList.remove('active')); document.querySelector('#typeToggle button[data-type="all"]').classList.add('active'); }]);
   }
-  if(state.zone) chips.push(['Zone: '+state.zone, () => { state.zone=null; }]);
+  if(state.instFilter) chips.push(['Institution: '+state.instFilter, () => { state.instFilter=''; }]);
+  if(state.zone) chips.push(['Zone: '+state.zone, () => { state.zone=null; document.getElementById('zoneSelect').value=''; }]);
   if(state.stateFilter) chips.push(['State: '+state.stateFilter, () => { state.stateFilter=''; document.getElementById('stateSelect').value=''; }]);
+  if(state.unitFilter) chips.push(['Faculty/School: '+state.unitFilter, () => { state.unitFilter=''; document.getElementById('unitSelect').value=''; refreshDependentOptions(); }]);
   if(state.progQuery) chips.push(['Programme: "'+state.progQuery+'"', () => { state.progQuery=''; document.getElementById('progInput').value=''; }]);
-  if(state.progTypeFilter) chips.push(['Award: '+state.progTypeFilter, () => { state.progTypeFilter=''; document.getElementById('progTypeSelect').value=''; }]);
-  if(state.unitFilter) chips.push(['Faculty/School: '+state.unitFilter, () => { state.unitFilter=''; document.getElementById('unitSelect').value=''; }]);
+  if(awardTypeApplies(state.type) && state.progTypeFilter) chips.push(['Award: '+state.progTypeFilter, () => { state.progTypeFilter=''; document.getElementById('progTypeSelect').value=''; }]);
   if(state.owners.size < 3) chips.push(['Ownership: '+[...state.owners].join(', '), () => { state.owners=new Set(['Federal','State','Private']); document.querySelectorAll('#ownerFilters input').forEach(i=>i.checked=true); }]);
 
   if(chips.length === 0){
@@ -429,14 +498,17 @@ function renderActiveFilters(){
 function card(r){
   const el = document.createElement('div');
   el.className = 'card';
+  const siteAction = r.website
+    ? `<a href="https://${r.website}" target="_blank" rel="noopener">Visit site</a>`
+    : `<span class="unavailable" aria-disabled="true">Not available</span>`;
   el.innerHTML = `
     <div class="card-top">
       <span class="badge type">${r.kindLabel}</span>
       <span class="badge ${r.proprietorship}">${r.proprietorship}</span>
     </div>
     <div class="prog">${r.programme}</div>
-    <div class="inst">${r.institution}</div>
-    <div class="fac">${r.unitLabel}: ${r.unit}</div>
+    <button type="button" class="inst inst-link" title="See every faculty and programme at ${r.institution}">${r.institution}</button>
+    <button type="button" class="fac fac-link" title="See every programme under ${r.unitLabel} of ${r.unit}">${r.unitLabel}: ${r.unit}</button>
     <div class="meta">
       <span>📍 ${r.state}, ${r.zone}</span>
       <span class="mono">${r.programmeType}</span>
@@ -446,7 +518,7 @@ function card(r){
       <span class="soon-inline">Accreditation: coming soon</span>
     </div>
     <div class="card-actions">
-      <a href="https://${r.website}" target="_blank" rel="noopener">Visit site</a>
+      ${siteAction}
       <button class="add ${state.compare.has(r.id)?'added':''}" data-id="${r.id}">${state.compare.has(r.id) ? 'Added ✓' : '+ Compare'}</button>
     </div>
   `;
@@ -458,6 +530,30 @@ function card(r){
       state.compare.add(r.id);
     }
     render();
+  });
+  // Institution-type link logic: the institution name navigates within the
+  // directory to that institution's own faculties/programmes, rather than
+  // out to a generic external page.
+  el.querySelector('button.inst-link').addEventListener('click', () => {
+    state.instFilter = r.institution;
+    state.unitFilter = ''; document.getElementById('unitSelect').value = '';
+    state.progQuery = ''; document.getElementById('progInput').value = '';
+    state.visibleCount = PAGE_SIZE;
+    refreshDependentOptions();
+    render();
+    document.querySelector('.layout').scrollIntoView({behavior:'smooth'});
+  });
+  // Faculty -> Programmes navigation: clicking a faculty/school drops
+  // straight into the list of programmes under that faculty.
+  el.querySelector('button.fac-link').addEventListener('click', () => {
+    state.instFilter = r.institution;
+    state.unitFilter = r.unit;
+    document.getElementById('unitSelect').value = r.unit;
+    state.progQuery = ''; document.getElementById('progInput').value = '';
+    state.visibleCount = PAGE_SIZE;
+    refreshDependentOptions();
+    render();
+    document.querySelector('.layout').scrollIntoView({behavior:'smooth'});
   });
   return el;
 }
@@ -516,7 +612,7 @@ function openCompareView(){
       html += `<tr><td class="label">${label}</td>`;
       rows.forEach(r => {
         let val = key === '__soon__' ? '<span class="soon-inline">Coming soon</span>' : r[key];
-        if(key==='website') val = `<a href="https://${val}" target="_blank">${val}</a>`;
+        if(key==='website') val = val ? `<a href="https://${val}" target="_blank">${val}</a>` : '<span class="unavailable">Not available</span>';
         html += `<td>${val}</td>`;
       });
       html += '</tr>';
@@ -544,9 +640,12 @@ document.getElementById('navCompare').addEventListener('click', () => {
   setNav('navCompare');
   openCompareView();
 });
-const RESEARCHER_DASHBOARD_URL = "https://public.tableau.com/views/TheIsUni_Data/Dashboard5?:language=en-US&:display_count=n&:origin=viz_share_link";
+/* Correct dashboard link, kept ready for when the researcher tooling goes
+   live -- for now the nav item is intentionally "Coming soon" (see the
+   click handler below) rather than opening this. */
+const RESEARCHER_DASHBOARD_URL = "https://public.tableau.com/app/profile/thels.impact.consulting/viz/ThelsUni_Data/Dashboard5";
 document.getElementById('navResearchers').addEventListener('click', () => {
-  window.open(RESEARCHER_DASHBOARD_URL, '_blank', 'noopener');
+  showToast("For researchers: coming soon — get information on Nigerian higher institutions.");
 });
 document.getElementById('closeModal').addEventListener('click', () => {
   document.getElementById('modalBackdrop').classList.remove('show');
