@@ -70,6 +70,20 @@ const STATE_ALIASES = {
   "Abuja": "FCT (Abuja)",
 };
 
+/* Some sheet rows carry literal placeholder text in the website column
+   ("N/A", "None", "-", "Not Available", ...) instead of leaving the cell
+   blank. Treat those the same as a truly empty cell -- otherwise they'd
+   render as a broken link like https://n/a. */
+const NOT_AVAILABLE_WEBSITE_VALUES = new Set([
+  "n/a", "na", "not available", "not availiable", "unavailable",
+  "none", "nil", "no website", "no site", "-", "--", "tbd", "coming soon",
+]);
+function hasRealWebsite(website){
+  if(!website) return false;
+  const normalized = String(website).trim().toLowerCase().replace(/\.+$/, "");
+  return normalized.length > 0 && !NOT_AVAILABLE_WEBSITE_VALUES.has(normalized);
+}
+
 /* Minimal RFC4180 CSV parser -- handles quoted fields, embedded commas,
    escaped quotes ("") and embedded newlines. Google's published-CSV export
    is the only format this app reads now, and the vendored SheetJS "core"
@@ -498,9 +512,9 @@ function renderActiveFilters(){
 function card(r){
   const el = document.createElement('div');
   el.className = 'card';
-  const siteAction = r.website
+  const siteAction = hasRealWebsite(r.website)
     ? `<a href="https://${r.website}" target="_blank" rel="noopener">Visit site</a>`
-    : `<span class="unavailable" aria-disabled="true">Not available</span>`;
+    : `<a href="not-available.html" target="_blank" rel="noopener" class="unavailable">Visit site (Not Available)</a>`;
   el.innerHTML = `
     <div class="card-top">
       <span class="badge type">${r.kindLabel}</span>
@@ -612,7 +626,9 @@ function openCompareView(){
       html += `<tr><td class="label">${label}</td>`;
       rows.forEach(r => {
         let val = key === '__soon__' ? '<span class="soon-inline">Coming soon</span>' : r[key];
-        if(key==='website') val = val ? `<a href="https://${val}" target="_blank">${val}</a>` : '<span class="unavailable">Not available</span>';
+        if(key==='website') val = hasRealWebsite(val)
+          ? `<a href="https://${val}" target="_blank">${val}</a>`
+          : `<a href="not-available.html" target="_blank" class="unavailable">Visit site (Not Available)</a>`;
         html += `<td>${val}</td>`;
       });
       html += '</tr>';

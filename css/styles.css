@@ -213,12 +213,13 @@
   .card .meta{display:flex; gap:14px; font-size:0.78rem; color:var(--ink-muted); margin-top:2px; flex-wrap:wrap;}
   .card .meta span{display:flex; align-items:center; gap:5px;}
   .card-actions{display:flex; gap:8px; margin-top:6px;}
-  .card-actions a, .card-actions button, .card-actions span.unavailable{
+  .card-actions a, .card-actions button{
     flex:1; text-align:center; padding:8px 10px; border-radius:8px; font-size:0.78rem; font-weight:600; text-decoration:none;
     border:1px solid var(--line); color:var(--navy); background:#FBFAF6;
   }
   .card-actions a:hover{border-color:var(--navy);}
-  .card-actions span.unavailable{color:var(--ink-muted); font-style:italic; cursor:default;}
+  .card-actions a.unavailable, .compare-table a.unavailable{color:var(--ink-muted); font-style:italic;}
+  .card-actions a.unavailable:hover{border-color:var(--line);}
   .card-actions button.add{background:var(--navy); color:#fff; border:1px solid #fff;}
   .card-actions button.add.added{background:var(--blue); color:#fff; border:1px solid #fff;}
 
