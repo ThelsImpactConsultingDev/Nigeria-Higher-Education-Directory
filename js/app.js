@@ -29,11 +29,11 @@ function sheetCsvUrl(gid){
 const SHEET_SOURCES = {
   universities: {
     gid: "2065139486",
-    columns: { institution: "UNIVERSITIES", unit: "Faculty", programme: "Programmes", state: "STATE", website: "WEBSITE", proprietorship: "TYPE OF PROPRIETARY" },
+    columns: { institution: "UNIVERSITIES", unit: "Faculty", programme: "Programmes", state: "STATE", website: "Website Faculties", proprietorship: "TYPE OF PROPRIETARY" },
   },
   colleges: {
     gid: "1234885830",
-    columns: { institution: "COLLEGE OF EDUCATION", unit: "SCHOOLS", programme: "PROGRAMME", programmeType: "PROGRAMME TYPE", state: "STATE", website: "WEBSITES", proprietorship: "PROPRIETY" },
+    columns: { institution: "COLLEGE OF EDUCATION", unit: "SCHOOLS", programme: "PROGRAMME", programmeType: "PROGRAMME TYPE", state: "STATE", website: "Website Schools", proprietorship: "PROPRIETY" },
   },
   polytechnics: {
     gid: "1375561536",

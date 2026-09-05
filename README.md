@@ -41,8 +41,8 @@ It has 3 tabs, each mapped to one category in `SHEET_SOURCES` in `js/app.js`:
 
 | Tab                                             | Category              | Columns                                                                              |
 | ----------------------------------------------- | --------------------- | ------------------------------------------------------------------------------------ |
-| `Cleaned_Fed_State_Private_Uny_Faculty_Courses` | Universities          | UNIVERSITIES, Faculty, Programmes, STATE, WEBSITE, TYPE OF PROPRIETARY               |
-| `Cleaned Colleges of Education`                 | Colleges of Education | COLLEGE OF EDUCATION, SCHOOLS, PROGRAMME, PROGRAMME TYPE, STATE, PROPRIETY, WEBSITES |
+| `Cleaned_Fed_State_Private_Uny_Faculty_Courses` | Universities          | UNIVERSITIES, Faculty, Programmes, STATE, Website Faculties, TYPE OF PROPRIETARY               |
+| `Cleaned Colleges of Education`                 | Colleges of Education | COLLEGE OF EDUCATION, SCHOOLS, PROGRAMME, PROGRAMME TYPE, STATE, PROPRIETY, Website Schools |
 | `Fed_St_Pri_Polytechnics_programmes`            | Polytechnics          | Polytechnic, Programmes, Facilities, STATE, WEBSITE, TYPE OF PROPREITARY             |
 
 **Monotechnics** and **Colleges of Health** have no tab yet, so they stay
@@ -92,6 +92,8 @@ URL bar.
 - **Award type** — only colleges of education carry a real one; universities
   and polytechnics show "Not specified".
 - **Websites** — missing for some institutions.
+- **Polytechnics** — website column is still the old `WEBSITE` header and has not
+  been re-verified/updated like the Universities and Colleges of Education tabs were.
 
 ## Deploying
 
